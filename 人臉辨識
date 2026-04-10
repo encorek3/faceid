@@ -1,0 +1,109 @@
+import cv2
+import face_recognition
+import os
+
+# --- 1. 準備檔案路徑 ---
+MODEL_DIR = r"C:\AI_Project"
+video_path = os.path.join(MODEL_DIR, "chen3.mp4")
+
+#  新功能：讀取資料夾內「所有」照片的特徵
+def get_all_encodings(folder_path, person_name):
+    encodings = []
+    if not os.path.exists(folder_path):
+        print(f"❌ 找不到資料夾：{folder_path}")
+        return encodings
+
+    print(f"⌛ 正在讀取 {person_name} 的照片...")
+    for filename in os.listdir(folder_path):
+        if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+            img_path = os.path.join(folder_path, filename)
+            
+            # 讀取照片並尋找特徵
+            image = face_recognition.load_image_file(img_path)
+            face_encs = face_recognition.face_encodings(image)
+            
+            # 確保照片裡面真的有臉
+            if len(face_encs) > 0:
+                encodings.append(face_encs[0])
+                print(f"   成功記憶：{filename}")
+            else:
+                print(f"   跳過：{filename} (找不到清晰的人臉)")
+                
+    return encodings
+
+# --- 2. 讓 AI 記住這些臉 ---
+print("=======================================")
+tsai_encodings = get_all_encodings(os.path.join(MODEL_DIR, "face01"), "陳傑縣")
+trump_encodings = get_all_encodings(os.path.join(MODEL_DIR, "face02"), "曾豪駒")
+print("=======================================")
+
+if len(tsai_encodings) == 0 or len(trump_encodings) == 0:
+    print("❌ 照片數量不足！請確認兩人的資料夾中至少有一張能成功讀取的照片。")
+    exit()
+
+# 🌟 把所有特徵和名字「攤平」放進資料庫
+known_encodings = tsai_encodings + trump_encodings
+# 如果曾豪駒有 5 張照片，就產生 5 個 "zhen hao gu"；陳傑憲有 3 張，就產生 3 個 "chen jia xiang"
+known_names = ["chen jia xiang"] * len(tsai_encodings) + ["zhen hao gu"] * len(trump_encodings)
+
+print(f"✅ AI 記憶完成！共記住了 {len(tsai_encodings)} 種陳傑憲的樣貌，{len(trump_encodings)} 種曾豪駒的樣貌。")
+print("🎬 準備開啟影片...")
+
+# --- 3. 影片精準辨識 (含跳幀加速) ---
+cap = cv2.VideoCapture(video_path)
+process_this_frame = True
+face_locations = []
+face_names = []
+
+while True:
+    ret, frame = cap.read()
+    if not ret: 
+        print("影片播放結束。")
+        break
+
+    small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
+    rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
+
+    if process_this_frame:
+        face_locations = face_recognition.face_locations(rgb_small_frame)
+        face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
+
+        face_names = []
+        for face_encoding in face_encodings:
+            #  修改點 1：將 tolerance 調到 0.4，這是最嚴格且精準的門檻
+            matches = face_recognition.compare_faces(known_encodings, face_encoding, tolerance=0.5)
+            name = "Unknown"
+
+            # 修改點 2：計算「臉部距離」
+            # 距離越小代表越像。我們找距離最小的那張照片。
+            face_distances = face_recognition.face_distance(known_encodings, face_encoding)
+            
+            if len(face_distances) > 0:
+                import numpy as np
+                best_match_index = np.argmin(face_distances) # 找出最像的那一張
+                if matches[best_match_index]:
+                    name = known_names[best_match_index]
+            
+            face_names.append(name)
+
+    process_this_frame = not process_this_frame
+
+    # 繪圖
+    for (top, right, bottom, left), name in zip(face_locations, face_names):
+        top *= 4
+        right *= 4
+        bottom *= 4
+        left *= 4
+
+        color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)
+
+        cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
+        cv2.putText(frame, name, (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+
+    cv2.imshow('Deep Learning Face Recognition', frame)
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
