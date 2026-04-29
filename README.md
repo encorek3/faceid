@@ -48,6 +48,7 @@
 - 🏷️ 顯示人物名稱標籤
 - ⚡ 高效能影片處理
 <img width="1696" height="732" alt="zhen" src="https://github.com/user-attachments/assets/0967b764-9a1c-4dfa-8324-7aebfa2dfb75" />
+<img width="1641" height="822" alt="chen " src="https://github.com/user-attachments/assets/fb6e609e-00f3-4d17-85cd-361855030bec" />
 
 ---
 
